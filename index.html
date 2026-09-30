@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>My Timeline</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕰️</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-text">
+        <h1 class="logo">My Timeline</h1>
+        <p class="tagline">Capture moments, one entry at a time ✨</p>
+      </div>
+      <button id="addBtn" class="btn btn-primary" type="button">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add entry
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <div id="timeline" class="timeline" aria-live="polite"></div>
+
+    <section id="emptyState" class="empty" hidden>
+      <div class="empty-emoji" aria-hidden="true">🕰️</div>
+      <h2>No entries yet</h2>
+      <p>Your timeline is waiting for its first moment.</p>
+      <button id="emptyAddBtn" class="btn btn-primary" type="button">Add your first entry</button>
+    </section>
+  </main>
+
+  <footer class="site-footer">Entries are saved locally in your browser.</footer>
+
+  <!-- Add / Edit modal -->
+  <div id="modalOverlay" class="modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-head">
+        <h2 id="modalTitle">New entry</h2>
+        <button id="closeModal" class="icon-btn" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <form id="entryForm">
+        <div class="field">
+          <label for="fTitle">Title</label>
+          <input id="fTitle" type="text" maxlength="120" placeholder="Give this moment a title" required>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Image <span class="optional">· optional</span></span>
+          <div class="image-inputs">
+            <label class="btn btn-ghost upload-btn">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Upload image
+              <input id="fFile" type="file" accept="image/*" hidden>
+            </label>
+            <input id="fImageUrl" type="text" inputmode="url" placeholder="…or paste an image URL" autocomplete="off">
+          </div>
+          <div id="imagePreview" class="image-preview" hidden>
+            <img id="previewImg" alt="Image preview">
+            <button type="button" id="removeImage" class="chip-btn">Remove image</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="fDesc">Description</label>
+          <textarea id="fDesc" rows="4" maxlength="2000" placeholder="What do you want to remember?"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="cancelBtn" class="btn btn-ghost">Cancel</button>
+          <button type="submit" id="saveBtn" class="btn btn-primary">Save entry</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
