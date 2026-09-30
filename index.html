@@ -19,10 +19,20 @@
         <h1 class="logo">My Timeline</h1>
         <p class="tagline">Capture moments, one entry at a time ✨</p>
       </div>
-      <button id="addBtn" class="btn btn-primary" type="button">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add entry
-      </button>
+      <div class="header-actions">
+        <button id="exportBtn" class="btn btn-ghost" type="button">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Export
+        </button>
+        <button id="importBtn" class="btn btn-ghost" type="button">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Import
+        </button>
+        <button id="addBtn" class="btn btn-primary" type="button">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add entry
+        </button>
+      </div>
     </div>
   </header>
 
@@ -56,6 +66,30 @@
         </div>
 
         <div class="field">
+          <span class="field-label">Category</span>
+          <div class="category-options">
+            <label class="category-option">
+              <input type="radio" name="fCategory" value="games">
+              <span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>Games release</span>
+            </label>
+            <label class="category-option">
+              <input type="radio" name="fCategory" value="event">
+              <span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Event</span>
+            </label>
+            <label class="category-option">
+              <input type="radio" name="fCategory" value="personal" checked>
+              <span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Personal</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="fEventDate">Event date &amp; time <span class="optional">· optional, defaults to now</span></label>
+          <input id="fEventDate" type="datetime-local">
+          <p class="field-hint">The timeline is ordered by this date — entries closest to today appear first.</p>
+        </div>
+
+        <div class="field">
           <span class="field-label">Image <span class="optional">· optional</span></span>
           <div class="image-inputs">
             <label class="btn btn-ghost upload-btn">
@@ -65,8 +99,10 @@
             </label>
             <input id="fImageUrl" type="text" inputmode="url" placeholder="…or paste an image URL" autocomplete="off">
           </div>
+          <p class="field-hint">Use a <b>direct image link</b> — one ending in .jpg, .png, .gif or .webp. Links to pages (Google, Instagram…) won't load. You can also paste a copied screenshot.</p>
           <div id="imagePreview" class="image-preview" hidden>
             <img id="previewImg" alt="Image preview">
+            <p id="imageError" class="field-error" hidden></p>
             <button type="button" id="removeImage" class="chip-btn">Remove image</button>
           </div>
         </div>
@@ -85,6 +121,49 @@
   </div>
 
   <div id="toast" class="toast" role="status"></div>
+
+  <!-- Import backup modal -->
+  <div id="importOverlay" class="modal-overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="importTitle">
+      <div class="modal-head">
+        <h2 id="importTitle">Import backup</h2>
+        <button id="importClose" class="icon-btn" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Backup file <span class="optional">· .json</span></span>
+        <div class="image-inputs">
+          <label class="btn btn-ghost upload-btn">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Choose file
+            <input id="importFile" type="file" accept=".json,application/json" hidden>
+          </label>
+        </div>
+        <p id="importInfo" class="field-hint" hidden></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Import mode</span>
+        <div class="category-options import-modes">
+          <label class="category-option">
+            <input type="radio" name="importMode" value="merge" checked>
+            <span>Merge · keep current entries</span>
+          </label>
+          <label class="category-option">
+            <input type="radio" name="importMode" value="replace">
+            <span>Replace · erase current entries</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="importCancel" class="btn btn-ghost">Cancel</button>
+        <button type="button" id="importApply" class="btn btn-primary" disabled>Import</button>
+      </div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>

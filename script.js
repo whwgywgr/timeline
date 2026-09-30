@@ -12,20 +12,47 @@ const els = {
   closeModal: document.getElementById('closeModal'),
   form: document.getElementById('entryForm'),
   fTitle: document.getElementById('fTitle'),
+  fEventDate: document.getElementById('fEventDate'),
   fFile: document.getElementById('fFile'),
   fImageUrl: document.getElementById('fImageUrl'),
   imagePreview: document.getElementById('imagePreview'),
   previewImg: document.getElementById('previewImg'),
+  imageError: document.getElementById('imageError'),
   removeImage: document.getElementById('removeImage'),
   fDesc: document.getElementById('fDesc'),
   cancelBtn: document.getElementById('cancelBtn'),
   saveBtn: document.getElementById('saveBtn'),
   toast: document.getElementById('toast'),
+  exportBtn: document.getElementById('exportBtn'),
+  importBtn: document.getElementById('importBtn'),
+  importOverlay: document.getElementById('importOverlay'),
+  importClose: document.getElementById('importClose'),
+  importCancel: document.getElementById('importCancel'),
+  importApply: document.getElementById('importApply'),
+  importFile: document.getElementById('importFile'),
+  importInfo: document.getElementById('importInfo'),
+};
+
+const CATEGORY_META = {
+  games: {
+    label: 'Games release',
+    icon: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="6"/></svg>',
+  },
+  event: {
+    label: 'Event',
+    icon: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  },
+  personal: {
+    label: 'Personal',
+    icon: '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  },
 };
 
 let entries = loadEntries();
 let editingId = null;
 let pendingImage = null;
+let imageFailed = false;
+let urlDebounce = null;
 let toastTimer = null;
 
 /* ---------- Storage ---------- */
@@ -33,7 +60,13 @@ let toastTimer = null;
 function loadEntries() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return Array.isArray(raw) ? raw : [];
+    if (!Array.isArray(raw)) return [];
+    // Entries saved before optional fields existed get sensible defaults.
+    return raw.map(e => ({
+      ...e,
+      eventDate: e.eventDate || e.createdAt,
+      category: CATEGORY_META[e.category] ? e.category : 'personal',
+    }));
   } catch {
     return [];
   }
@@ -56,11 +89,20 @@ function uid() {
     : 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-function fmtDate(iso) {
-  return new Date(iso).toLocaleString(undefined, {
-    day: 'numeric', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
+// Format an ISO date for the datetime-local input (local time, minute precision).
+function toLocalInputValue(iso) {
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Event dates often have no meaningful time (e.g. release days) — hide a 00:00 time.
+function fmtEventDate(iso) {
+  const d = new Date(iso);
+  const atMidnight = d.getHours() === 0 && d.getMinutes() === 0;
+  return d.toLocaleString(undefined, atMidnight
+    ? { day: 'numeric', month: 'short', year: 'numeric' }
+    : { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function esc(s) {
@@ -100,12 +142,48 @@ function compressImage(file) {
 
 /* ---------- Rendering ---------- */
 
+// "In 21 days" / "Today" / "3 days ago" — helps the closest-first sort make sense.
+function countdownText(iso) {
+  const now = new Date();
+  const d = new Date(iso);
+  const dayMs = 86400000;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const days = Math.round((target - today) / dayMs);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  if (days === -1) return 'Yesterday';
+  return days > 1 ? `In ${days} days` : `${-days} days ago`;
+}
+
+// "Oct 1, 07:33 AM" — short created stamp like the reference design.
+function fmtCreatedShort(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+    + ', ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+// Revision stamp: time only when modified on the same day, full stamp otherwise.
+function fmtRevText(entry) {
+  const sameDay = new Date(entry.createdAt).toDateString() === new Date(entry.updatedAt).toDateString();
+  return sameDay
+    ? new Date(entry.updatedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : fmtCreatedShort(entry.updatedAt);
+}
+
 function cardHTML(entry, index) {
   const side = index % 2 === 0 ? 'left' : 'right';
-  const wasEdited = entry.updatedAt !== entry.createdAt;
-  const image = entry.image
-    ? `<img class="card-img" src="${esc(entry.image)}" alt="${esc(entry.title)}" loading="lazy">`
+  const cat = CATEGORY_META[entry.category] || CATEGORY_META.personal;
+  const catClass = `card-cat cat-${esc(entry.category || 'personal')}`;
+  const catBadge = `<span class="${catClass}">${cat.icon}${esc(cat.label)}</span>`;
+  const media = entry.image
+    ? `<div class="card-media">
+        <img class="card-img" src="${esc(entry.image)}" alt="${esc(entry.title)}" loading="lazy"
+          onerror="this.closest('.card-media') && this.closest('.card-media').classList.add('img-failed')">
+        ${catBadge}
+      </div>`
     : '';
+  const inlineCat = entry.image ? '' : catBadge.replace('card-cat', 'card-cat static');
   const desc = entry.description
     ? `<p class="card-desc">${esc(entry.description)}</p>`
     : '';
@@ -113,33 +191,46 @@ function cardHTML(entry, index) {
   return `
   <article class="tl-item ${side}" data-id="${esc(entry.id)}">
     <div class="card">
-      ${image}
-      <h3 class="card-title">${esc(entry.title)}</h3>
-      ${desc}
-      <div class="card-dates">
-        <span class="date-chip">Created · ${fmtDate(entry.createdAt)}</span>
-        <span class="date-chip${wasEdited ? ' edited' : ''}">Modified · ${fmtDate(entry.updatedAt)}</span>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-share" data-action="share" type="button">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          Share
-        </button>
-        <button class="btn btn-ghost" data-action="edit" type="button">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-          Edit
-        </button>
-        <button class="btn btn-danger-ghost" data-action="delete" type="button">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          Delete
-        </button>
+      ${media}
+      <div class="card-body">
+        ${inlineCat}
+        <div class="card-meta-top">
+          <span class="card-date">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            ${fmtEventDate(entry.eventDate)}
+          </span>
+          <span class="card-countdown">${countdownText(entry.eventDate)}</span>
+        </div>
+        <h3 class="card-title">${esc(entry.title)}</h3>
+        ${desc}
+        <div class="card-footer-meta">
+          <span><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Created: <b>${fmtCreatedShort(entry.createdAt)}</b></span>
+          <span><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Rev: <b>${fmtRevText(entry)}</b></span>
+        </div>
+        <div class="card-actions">
+          <button class="btn btn-card-share" data-action="share" type="button">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Share
+          </button>
+          <button class="btn btn-card-edit" data-action="edit" type="button">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            Edit
+          </button>
+          <button class="btn btn-card-delete" data-action="delete" type="button">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete
+          </button>
+        </div>
       </div>
     </div>
   </article>`;
 }
 
 function render() {
-  const sorted = [...entries].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  // Entries closest to today (past or upcoming) appear first.
+  const now = Date.now();
+  const sorted = [...entries].sort((a, b) =>
+    Math.abs(new Date(a.eventDate) - now) - Math.abs(new Date(b.eventDate) - now));
   els.timeline.innerHTML = sorted.map(cardHTML).join('');
   els.empty.hidden = sorted.length > 0;
 }
@@ -196,6 +287,8 @@ function updatePreview() {
     els.imagePreview.hidden = false;
   } else {
     els.previewImg.removeAttribute('src');
+    els.previewImg.classList.remove('loading', 'failed');
+    els.imageError.hidden = true;
     els.imagePreview.hidden = true;
   }
 }
@@ -204,6 +297,10 @@ function openModal(entry = null) {
   editingId = entry ? entry.id : null;
   pendingImage = entry ? entry.image : null;
   els.fTitle.value = entry ? entry.title : '';
+  els.fEventDate.value = entry ? toLocalInputValue(entry.eventDate) : '';
+  const cat = (entry && CATEGORY_META[entry.category]) ? entry.category : 'personal';
+  const catRadio = els.form.querySelector(`input[name="fCategory"][value="${cat}"]`);
+  if (catRadio) catRadio.checked = true;
   els.fDesc.value = entry ? entry.description : '';
   els.fImageUrl.value = '';
   els.fFile.value = '';
@@ -231,17 +328,25 @@ function saveEntry(e) {
     return;
   }
   const description = els.fDesc.value.trim();
-  const image = (pendingImage || els.fImageUrl.value.trim() || '');
+  clearTimeout(urlDebounce);
+  const rawUrl = els.fImageUrl.value.trim();
+  const image = (pendingImage || (rawUrl ? normalizeImageUrl(rawUrl) : '') || '');
+  const categoryRadio = els.form.querySelector('input[name="fCategory"]:checked');
+  const category = categoryRadio ? categoryRadio.value : 'personal';
   const now = new Date().toISOString();
+  // Leave the picker empty to place the entry at "now" on the timeline.
+  const eventDate = els.fEventDate.value
+    ? new Date(els.fEventDate.value).toISOString()
+    : now;
 
   if (editingId) {
     const entry = entries.find(x => x.id === editingId);
     if (entry) {
-      Object.assign(entry, { title, description, image, updatedAt: now });
+      Object.assign(entry, { title, description, image, eventDate, category, updatedAt: now });
       showToast('Entry updated ✓');
     }
   } else {
-    entries.push({ id: uid(), title, description, image, createdAt: now, updatedAt: now });
+    entries.push({ id: uid(), title, description, image, eventDate, category, createdAt: now, updatedAt: now });
     showToast('Entry added ✓');
   }
 
@@ -252,6 +357,171 @@ function saveEntry(e) {
   }
   render();
   closeModal();
+}
+
+/* ---------- Backup: export & import ---------- */
+
+function validDateIso(v) {
+  const d = new Date(v);
+  return isNaN(d) ? null : d.toISOString();
+}
+
+function exportBackup() {
+  if (!entries.length) {
+    showToast('Nothing to export yet — add an entry first');
+    return;
+  }
+  const payload = {
+    app: 'my-timeline',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    entries: [...entries].sort((a, b) => new Date(a.eventDate) - new Date(b.eventDate)),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  a.href = url;
+  a.download = `timeline-backup-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Exported ${entries.length} entries ✓`);
+}
+
+// Parse & validate a backup file's text into a clean entries array.
+function parseBackupText(text) {
+  const data = JSON.parse(text);
+  const raw = Array.isArray(data) ? data : data && data.entries;
+  if (!Array.isArray(raw)) throw new Error('No entries array found in this file');
+  const parsed = [];
+  let skipped = 0;
+  for (const e of raw) {
+    if (!e || typeof e !== 'object' || !e.title || !String(e.title).trim()) {
+      skipped++;
+      continue;
+    }
+    const eventDate = validDateIso(e.eventDate) || validDateIso(e.createdAt) || new Date().toISOString();
+    parsed.push({
+      id: typeof e.id === 'string' && e.id ? e.id : uid(),
+      title: String(e.title).trim(),
+      description: typeof e.description === 'string' ? e.description : '',
+      image: typeof e.image === 'string' ? e.image : '',
+      eventDate,
+      category: CATEGORY_META[e.category] ? e.category : 'personal',
+      createdAt: validDateIso(e.createdAt) || eventDate,
+      updatedAt: validDateIso(e.updatedAt) || eventDate,
+    });
+  }
+  return { entries: parsed, skipped };
+}
+
+let importData = null;
+
+function openImport() {
+  importData = null;
+  els.importFile.value = '';
+  els.importInfo.hidden = true;
+  els.importApply.disabled = true;
+  const mergeRadio = document.querySelector('input[name="importMode"][value="merge"]');
+  if (mergeRadio) mergeRadio.checked = true;
+  els.importOverlay.classList.add('open');
+  document.body.classList.add('modal-open');
+}
+
+function closeImport() {
+  els.importOverlay.classList.remove('open');
+  document.body.classList.remove('modal-open');
+  importData = null;
+}
+
+function handleImportFile(e) {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const { entries: parsed, skipped } = parseBackupText(String(reader.result));
+      if (!parsed.length) throw new Error('No valid entries in this file');
+      importData = parsed;
+      const dates = parsed.map(x => new Date(x.eventDate)).sort((a, b) => a - b);
+      const range = `${dates[0].toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })} – ${dates[dates.length - 1].toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      els.importInfo.textContent = `${file.name}: ${parsed.length} entries (${range})`
+        + (skipped ? ` · ${skipped} invalid skipped` : '');
+      els.importInfo.hidden = false;
+      els.importApply.disabled = false;
+    } catch (err) {
+      importData = null;
+      els.importInfo.hidden = true;
+      els.importApply.disabled = true;
+      showToast(`Import failed: ${err.message}`);
+    }
+  };
+  reader.onerror = () => showToast('Could not read that file');
+  reader.readAsText(file);
+}
+
+function applyImport() {
+  if (!importData) return;
+  const modeRadio = document.querySelector('input[name="importMode"]:checked');
+  const mode = modeRadio ? modeRadio.value : 'merge';
+
+  if (mode === 'replace') {
+    const count = importData.length;
+    entries = importData;
+    persist();
+    render();
+    showToast(`Timeline replaced with ${count} entries ✓`);
+  } else {
+    const ids = new Set(entries.map(x => x.id));
+    const fresh = importData.filter(x => !ids.has(x.id));
+    entries = entries.concat(fresh);
+    persist();
+    render();
+    const skipped = importData.length - fresh.length;
+    showToast(`Imported ${fresh.length} new entries ✓`
+      + (skipped ? ` (${skipped} already on your timeline)` : ''));
+  }
+  closeImport();
+}
+
+async function useImageFile(file) {
+  if (!file.type.startsWith('image/')) {
+    showToast('Please choose an image file');
+    return;
+  }
+  try {
+    pendingImage = await compressImage(file);
+    imageFailed = false;
+    els.fImageUrl.value = '';
+    els.imageError.hidden = true;
+    updatePreview();
+  } catch {
+    showToast('Could not read that image');
+  }
+}
+
+function normalizeImageUrl(raw) {
+  return /^(https?:\/\/|data:image\/)/i.test(raw) ? raw : 'https://' + raw;
+}
+
+function applyUrlPreview() {
+  const raw = els.fImageUrl.value.trim();
+  imageFailed = false;
+  els.previewImg.classList.remove('loading', 'failed');
+  if (!raw) {
+    pendingImage = null;
+    els.imageError.hidden = true;
+    updatePreview();
+    return;
+  }
+  pendingImage = normalizeImageUrl(raw);
+  els.imageError.hidden = true;
+  els.previewImg.classList.add('loading');
+  updatePreview();
 }
 
 /* ---------- Events ---------- */
@@ -266,33 +536,59 @@ els.overlay.addEventListener('click', e => {
 });
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && els.overlay.classList.contains('open')) closeModal();
+  if (e.key === 'Escape') {
+    if (els.overlay.classList.contains('open')) closeModal();
+    if (els.importOverlay.classList.contains('open')) closeImport();
+  }
 });
+
+els.exportBtn.addEventListener('click', exportBackup);
+els.importBtn.addEventListener('click', openImport);
+els.importClose.addEventListener('click', closeImport);
+els.importCancel.addEventListener('click', closeImport);
+els.importOverlay.addEventListener('click', e => {
+  if (e.target === els.importOverlay) closeImport();
+});
+els.importFile.addEventListener('change', handleImportFile);
+els.importApply.addEventListener('click', applyImport);
 
 els.fFile.addEventListener('change', async e => {
   const file = e.target.files && e.target.files[0];
   e.target.value = '';
-  if (!file) return;
-  if (!file.type.startsWith('image/')) {
-    showToast('Please choose an image file');
-    return;
-  }
-  try {
-    pendingImage = await compressImage(file);
-    els.fImageUrl.value = '';
-    updatePreview();
-  } catch {
-    showToast('Could not read that image');
+  if (file) useImageFile(file);
+});
+
+// Pasting an image (e.g. a screenshot) straight into the URL field also works.
+els.fImageUrl.addEventListener('paste', e => {
+  const files = e.clipboardData && e.clipboardData.files;
+  if (files && files.length && files[0].type.startsWith('image/')) {
+    e.preventDefault();
+    useImageFile(files[0]);
   }
 });
 
 els.fImageUrl.addEventListener('input', () => {
-  pendingImage = els.fImageUrl.value.trim() || null;
-  updatePreview();
+  clearTimeout(urlDebounce);
+  urlDebounce = setTimeout(applyUrlPreview, 400);
+});
+
+els.previewImg.addEventListener('load', () => {
+  els.previewImg.classList.remove('loading', 'failed');
+  els.imageError.hidden = true;
+});
+
+els.previewImg.addEventListener('error', () => {
+  els.previewImg.classList.remove('loading');
+  if (!els.previewImg.getAttribute('src')) return;
+  imageFailed = true;
+  els.previewImg.classList.add('failed');
+  els.imageError.textContent = "Couldn't load that image. Use a direct image link — one ending in .jpg, .png, .gif or .webp. Links to pages (Google, Instagram…) won't work.";
+  els.imageError.hidden = false;
 });
 
 els.removeImage.addEventListener('click', () => {
   pendingImage = null;
+  imageFailed = false;
   els.fImageUrl.value = '';
   els.fFile.value = '';
   updatePreview();
