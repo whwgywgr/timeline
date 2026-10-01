@@ -7,7 +7,7 @@
 -- 1) Table for timeline entries
 create table if not exists public.timeline_entries (
   id          uuid primary key default gen_random_uuid(),
-  user_id     uuid not null references auth.users(id) on delete cascade,
+  user_id     uuid not null default auth.uid() references auth.users(id) on delete cascade,
   title       text not null,
   description text not null default '',
   image       text not null default '',
@@ -17,6 +17,9 @@ create table if not exists public.timeline_entries (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+-- If you already created the table before this default existed, run this once too:
+-- alter table public.timeline_entries alter column user_id set default auth.uid();
 
 create index if not exists timeline_entries_user_idx
   on public.timeline_entries (user_id, event_date);

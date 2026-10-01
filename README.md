@@ -1,8 +1,8 @@
-# My Timeline 🕰️
+# Timeline26 🕰️
 
-A soft, light-themed personal timeline website. You add entries manually — each entry
+A dark, cinematic personal timeline website. You add entries manually — each entry
 has a **title**, **image**, **description**, **date created**, **date modified**, and a
-**share button**.
+**share button**. Entries sync to Supabase with Google sign-in.
 
 Built with plain **HTML, CSS and JavaScript** only — no frameworks, no build step.
 
