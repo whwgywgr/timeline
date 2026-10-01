@@ -31,6 +31,7 @@ const els = {
   importApply: document.getElementById('importApply'),
   importFile: document.getElementById('importFile'),
   importInfo: document.getElementById('importInfo'),
+  dateRail: document.getElementById('dateRail'),
 };
 
 const CATEGORY_META = {
@@ -235,6 +236,7 @@ function render() {
     Math.abs(new Date(a.eventDate) - now) - Math.abs(new Date(b.eventDate) - now));
   els.timeline.innerHTML = sorted.map(cardHTML).join('');
   els.empty.hidden = sorted.length > 0;
+  renderDateRail(sorted);
 }
 
 /* ---------- Actions ---------- */
@@ -608,6 +610,115 @@ els.timeline.addEventListener('click', e => {
   if (btn.dataset.action === 'share') shareEntry(entry);
   if (btn.dataset.action === 'edit') openModal(entry);
   if (btn.dataset.action === 'delete') deleteEntry(entry);
+});
+
+/* ---------- Date rail ---------- */
+
+function monthKey(entry) {
+  const d = new Date(entry.eventDate);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function renderDateRail(sorted) {
+  if (!sorted.length) {
+    els.dateRail.hidden = true;
+    els.dateRail.innerHTML = '';
+    return;
+  }
+  // Months that actually have entries, in chronological order, grouped by year.
+  const months = new Map();
+  for (const e of sorted) {
+    const key = monthKey(e);
+    if (!months.has(key)) {
+      const d = new Date(e.eventDate);
+      months.set(key, {
+        year: d.getFullYear(),
+        label: d.toLocaleString(undefined, { month: 'short' }).toUpperCase()
+          + ' ' + d.getFullYear(),
+      });
+    }
+  }
+  const keys = [...months.keys()].sort();
+  const currentYear = new Date().getFullYear();
+
+  let html = '';
+  let openGroup = false;
+  let lastYear = null;
+  for (const key of keys) {
+    const m = months.get(key);
+    if (m.year !== lastYear) {
+      if (openGroup) html += '</div>';
+      html += `<div class="rail-year ${m.year === currentYear ? 'current' : 'future'}">`
+        + `<span class="rail-bracket">[</span> ${m.year} <span class="rail-bracket">]</span></div>`
+        + '<div class="rail-months">';
+      openGroup = true;
+      lastYear = m.year;
+    }
+    html += `<button class="rail-month" data-month="${key}" type="button">`
+      + '<span class="rail-dot" aria-hidden="true"></span>'
+      + `${m.label}</button>`;
+  }
+  if (openGroup) html += '</div>';
+
+  els.dateRail.innerHTML = html;
+  els.dateRail.hidden = false;
+  setActiveMonth(keys[0]);
+}
+
+function setActiveMonth(key) {
+  els.dateRail.querySelectorAll('.rail-month').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.month === key);
+  });
+}
+
+// Scrollspy: highlight the month of the card currently nearest the top.
+function updateActiveMonthFromScroll() {
+  const cards = document.querySelectorAll('.tl-item');
+  if (!cards.length) return;
+  let activeKey = null;
+  // At the very bottom, the last card can never reach the top — highlight it instead.
+  const atBottom = window.innerHeight + window.scrollY
+    >= document.documentElement.scrollHeight - 4;
+  if (atBottom) {
+    const entry = entries.find(x => x.id === cards[cards.length - 1].dataset.id);
+    if (entry) activeKey = monthKey(entry);
+  } else {
+    for (const card of cards) {
+      if (card.getBoundingClientRect().top <= 180) {
+        const entry = entries.find(x => x.id === card.dataset.id);
+        if (entry) activeKey = monthKey(entry);
+      } else break;
+    }
+    if (!activeKey) {
+      const entry = entries.find(x => x.id === cards[0].dataset.id);
+      if (entry) activeKey = monthKey(entry);
+    }
+  }
+  if (activeKey) setActiveMonth(activeKey);
+}
+
+let railSpyTick = false;
+window.addEventListener('scroll', () => {
+  if (railSpyTick) return;
+  railSpyTick = true;
+  requestAnimationFrame(() => {
+    railSpyTick = false;
+    updateActiveMonthFromScroll();
+  });
+}, { passive: true });
+
+els.dateRail.addEventListener('click', e => {
+  const btn = e.target.closest('.rail-month');
+  if (!btn) return;
+  const key = btn.dataset.month;
+  const card = [...document.querySelectorAll('.tl-item')].find(c => {
+    const entry = entries.find(x => x.id === c.dataset.id);
+    return entry && monthKey(entry) === key;
+  });
+  if (!card) return;
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  card.classList.add('highlight');
+  setTimeout(() => card.classList.remove('highlight'), 2400);
 });
 
 /* ---------- Init ---------- */

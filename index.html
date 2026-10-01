@@ -37,14 +37,19 @@
   </header>
 
   <main>
-    <div id="timeline" class="timeline" aria-live="polite"></div>
+    <div class="page-layout">
+      <nav id="dateRail" class="date-rail" aria-label="Jump to month" hidden></nav>
+      <div class="timeline-area">
+        <div id="timeline" class="timeline" aria-live="polite"></div>
 
-    <section id="emptyState" class="empty" hidden>
-      <div class="empty-emoji" aria-hidden="true">🕰️</div>
-      <h2>No entries yet</h2>
-      <p>Your timeline is waiting for its first moment.</p>
-      <button id="emptyAddBtn" class="btn btn-primary" type="button">Add your first entry</button>
-    </section>
+        <section id="emptyState" class="empty" hidden>
+          <div class="empty-emoji" aria-hidden="true">🕰️</div>
+          <h2>No entries yet</h2>
+          <p>Your timeline is waiting for its first moment.</p>
+          <button id="emptyAddBtn" class="btn btn-primary" type="button">Add your first entry</button>
+        </section>
+      </div>
+    </div>
   </main>
 
   <footer class="site-footer">Entries are saved locally in your browser.</footer>
