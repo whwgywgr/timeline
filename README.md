@@ -37,6 +37,20 @@ npx serve .
   (duplicates by id are skipped) or **replaces** everything
 - Entries persist in `localStorage` — they stay in your browser between visits
 
+## Cloud sync (optional)
+
+The timeline works fully offline in localStorage. To sync across devices:
+
+1. Create a Supabase project (free tier is enough) and run `supabase-setup.sql`
+   in its SQL Editor — this creates the table, Storage bucket and Row Level
+   Security policies (each signed-in user only sees their own data)
+2. Enable Google as an auth provider (Supabase → Authentication → Providers),
+   pointing it at a Google OAuth client you create in Google Cloud Console
+3. Put your Project URL + anon key in `supabase-config.js`
+
+Sign in via **⋯ → Sign in with Google**. Guests keep using localStorage, and
+**⋯ → Migrate local entries** uploads existing local entries to the cloud once.
+
 ## Files
 
 | File         | Purpose                     |

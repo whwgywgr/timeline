@@ -35,6 +35,11 @@ const els = {
   filterChips: document.getElementById('filterChips'),
   moreBtn: document.getElementById('moreBtn'),
   moreMenu: document.getElementById('moreMenu'),
+  signInItem: document.getElementById('signInItem'),
+  migrateItem: document.getElementById('migrateItem'),
+  signOutItem: document.getElementById('signOutItem'),
+  accountInfo: document.getElementById('accountInfo'),
+  menuDivider: document.getElementById('menuDivider'),
   emptyTitle: document.querySelector('#emptyState h2'),
   emptyText: document.querySelector('#emptyState p'),
 };
@@ -61,6 +66,11 @@ let imageFailed = false;
 let urlDebounce = null;
 let toastTimer = null;
 let activeFilter = 'all';
+
+/* Cloud (Supabase) state — guests keep using localStorage only. */
+let session = null;
+let cloudEmpty = true;
+let loadedForUserId = null;
 
 /* ---------- Storage ---------- */
 
@@ -258,10 +268,21 @@ function render() {
 
 /* ---------- Actions ---------- */
 
-function deleteEntry(entry) {
+async function deleteEntry(entry) {
   if (!confirm(`Delete "${entry.title}"? This cannot be undone.`)) return;
-  entries = entries.filter(e => e.id !== entry.id);
-  persist();
+  if (session) {
+    try {
+      await cloudDelete(entry.id);
+    } catch (err) {
+      showToast('Cloud delete failed — ' + (err.message || 'try again'));
+      return;
+    }
+    entries = entries.filter(e => e.id !== entry.id);
+    saveSignedCache();
+  } else {
+    entries = entries.filter(e => e.id !== entry.id);
+    persist();
+  }
   render();
   showToast('Entry deleted');
 }
@@ -340,7 +361,7 @@ function closeModal() {
   pendingImage = null;
 }
 
-function saveEntry(e) {
+async function saveEntry(e) {
   e.preventDefault();
   const title = els.fTitle.value.trim();
   if (!title) {
@@ -360,21 +381,47 @@ function saveEntry(e) {
     ? new Date(els.fEventDate.value).toISOString()
     : now;
 
-  if (editingId) {
+  if (session) {
+    // Signed in — Supabase is the source of truth.
+    els.saveBtn.disabled = true;
+    try {
+      const finalImage = await ensureUploadedImage(image);
+      if (editingId) {
+        const target = entries.find(x => x.id === editingId);
+        if (!target) throw new Error('Entry not found');
+        const updated = await cloudUpdate({
+          id: editingId, title, description, image: finalImage,
+          eventDate, category, createdAt: target.createdAt, updatedAt: now,
+        });
+        const idx = entries.findIndex(x => x.id === editingId);
+        entries[idx] = updated;
+        showToast('Entry updated ✓');
+      } else {
+        const created = await cloudInsert({
+          title, description, image: finalImage,
+          eventDate, category, createdAt: now, updatedAt: now,
+        });
+        entries.push(created);
+        showToast('Entry added ✓');
+      }
+      saveSignedCache();
+    } catch (err) {
+      showToast('Cloud save failed — ' + (err.message || 'try again'));
+      return; // keep the modal open so the entry can be retried
+    } finally {
+      els.saveBtn.disabled = false;
+    }
+  } else if (editingId) {
     const entry = entries.find(x => x.id === editingId);
     if (entry) {
       Object.assign(entry, { title, description, image, eventDate, category, updatedAt: now });
       showToast('Entry updated ✓');
     }
+    persist();
   } else {
     entries.push({ id: uid(), title, description, image, eventDate, category, createdAt: now, updatedAt: now });
     showToast('Entry added ✓');
-  }
-
-  try {
     persist();
-  } catch {
-    return; // keep the modal open so the user can shrink the image
   }
   render();
   closeModal();
@@ -485,26 +532,53 @@ function handleImportFile(e) {
   reader.readAsText(file);
 }
 
-function applyImport() {
+async function applyImport() {
   if (!importData) return;
   const modeRadio = document.querySelector('input[name="importMode"]:checked');
   const mode = modeRadio ? modeRadio.value : 'merge';
+  els.importApply.disabled = true;
 
-  if (mode === 'replace') {
-    const count = importData.length;
-    entries = importData;
-    persist();
-    render();
-    showToast(`Timeline replaced with ${count} entries ✓`);
-  } else {
-    const ids = new Set(entries.map(x => x.id));
-    const fresh = importData.filter(x => !ids.has(x.id));
-    entries = entries.concat(fresh);
-    persist();
-    render();
-    const skipped = importData.length - fresh.length;
-    showToast(`Imported ${fresh.length} new entries ✓`
-      + (skipped ? ` (${skipped} already on your timeline)` : ''));
+  try {
+    if (session) {
+      if (mode === 'replace') {
+        // RLS limits this to the signed-in user's own rows.
+        const { error } = await sb.from('timeline_entries')
+          .delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (error) throw error;
+      }
+      const ids = mode === 'merge' ? new Set(entries.map(x => x.id)) : new Set();
+      const fresh = importData.filter(x => !ids.has(x.id));
+      if (fresh.length) {
+        const rows = fresh.map(x => ({
+          ...entryToRow(x), created_at: x.createdAt, updated_at: x.updatedAt,
+        }));
+        const { error } = await sb.from('timeline_entries').insert(rows);
+        if (error) throw error;
+      }
+      const skipped = importData.length - fresh.length;
+      showToast(`Imported ${fresh.length} entries ✓`
+        + (skipped ? ` (${skipped} already on your timeline)` : ''));
+      await loadFromCloud();
+    } else if (mode === 'replace') {
+      const count = importData.length;
+      entries = importData;
+      persist();
+      render();
+      showToast(`Timeline replaced with ${count} entries ✓`);
+    } else {
+      const ids = new Set(entries.map(x => x.id));
+      const fresh = importData.filter(x => !ids.has(x.id));
+      entries = entries.concat(fresh);
+      persist();
+      render();
+      const skipped = importData.length - fresh.length;
+      showToast(`Imported ${fresh.length} new entries ✓`
+        + (skipped ? ` (${skipped} already on your timeline)` : ''));
+    }
+  } catch (err) {
+    showToast('Import failed — ' + (err.message || 'try again'));
+  } finally {
+    els.importApply.disabled = false;
   }
   closeImport();
 }
@@ -515,13 +589,14 @@ async function useImageFile(file) {
     return;
   }
   try {
-    pendingImage = await compressImage(file);
+    const dataUrl = await compressImage(file);
+    pendingImage = await uploadDataUrl(dataUrl);   // guest: returns dataUrl as-is
     imageFailed = false;
     els.fImageUrl.value = '';
     els.imageError.hidden = true;
     updatePreview();
-  } catch {
-    showToast('Could not read that image');
+  } catch (err) {
+    showToast('Could not process that image' + (err.message ? ' — ' + err.message : ''));
   }
 }
 
@@ -543,6 +618,153 @@ function applyUrlPreview() {
   els.imageError.hidden = true;
   els.previewImg.classList.add('loading');
   updatePreview();
+}
+
+/* ---------- Cloud (Supabase) data layer ---------- */
+
+const SIGNED_CACHE_KEY = 'timeline-cache-v1';
+
+function guestLocalCount() {
+  try { return (JSON.parse(localStorage.getItem(STORAGE_KEY)) || []).length; }
+  catch { return 0; }
+}
+
+function saveSignedCache() {
+  try { localStorage.setItem(SIGNED_CACHE_KEY, JSON.stringify(entries)); } catch { /* offline cache best-effort */ }
+}
+
+function loadSignedCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SIGNED_CACHE_KEY));
+    return Array.isArray(raw) ? raw : [];
+  } catch { return []; }
+}
+
+function rowToLocal(r) {
+  return {
+    id: r.id,
+    title: r.title || '',
+    description: r.description || '',
+    image: r.image || '',
+    eventDate: r.event_date,
+    category: CATEGORY_META[r.category] ? r.category : 'personal',
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+function entryToRow(entry) {
+  return {
+    title: entry.title,
+    description: entry.description || '',
+    image: entry.image || '',
+    event_date: entry.eventDate,
+    category: entry.category || 'personal',
+  };
+}
+
+async function loadFromCloud() {
+  try {
+    const { data, error } = await sb.from('timeline_entries')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    entries = (data || []).map(rowToLocal).map(e => ({
+      ...e,
+      eventDate: e.eventDate || e.createdAt,
+    }));
+    cloudEmpty = entries.length === 0;
+    saveSignedCache();
+  } catch {
+    // offline or table not set up yet — show the cached mirror instead
+    entries = loadSignedCache();
+    cloudEmpty = entries.length === 0;
+    showToast('Offline — showing cached entries');
+  }
+  render();
+}
+
+async function cloudInsert(entry) {
+  const row = { ...entryToRow(entry), created_at: entry.createdAt, updated_at: entry.updatedAt };
+  const { data, error } = await sb.from('timeline_entries').insert(row).select().single();
+  if (error) throw error;
+  return rowToLocal(data);
+}
+
+async function cloudUpdate(entry) {
+  const row = { ...entryToRow(entry), updated_at: new Date().toISOString() };
+  const { data, error } = await sb.from('timeline_entries')
+    .update(row).eq('id', entry.id).select().single();
+  if (error) throw error;
+  return rowToLocal(data);
+}
+
+async function cloudDelete(id) {
+  const { error } = await sb.from('timeline_entries').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// Upload a base64 data URL into Storage and return its public URL.
+async function uploadDataUrl(dataUrl) {
+  if (!session) return dataUrl;
+  const blob = await (await fetch(dataUrl)).blob();
+  const ext = blob.type === 'image/png' ? 'png' : 'jpg';
+  const path = `${session.user.id}/${uid()}.${ext}`;
+  const { error } = await sb.storage.from('timeline-images')
+    .upload(path, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
+  if (error) throw error;
+  const { data } = sb.storage.from('timeline-images').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+// Signed-in users get pasted/data-URL images pushed to Storage on save.
+async function ensureUploadedImage(image) {
+  if (image && image.startsWith('data:image/')) return uploadDataUrl(image);
+  return image || '';
+}
+
+/* ---------- Auth ---------- */
+
+function updateAuthUI() {
+  const signedIn = !!session;
+  els.accountInfo.hidden = !signedIn;
+  els.signInItem.hidden = signedIn;
+  els.signOutItem.hidden = !signedIn;
+  els.menuDivider.hidden = !signedIn;
+  els.migrateItem.hidden = !(signedIn && cloudEmpty && guestLocalCount() > 0);
+  if (!signedIn) return;
+  const u = session.user;
+  const name = u.user_metadata?.full_name || u.user_metadata?.name || 'Signed in';
+  const mail = u.email || '';
+  const avatar = u.user_metadata?.avatar_url || u.user_metadata?.picture || '';
+  const initial = esc((name[0] || '?').toUpperCase());
+  els.accountInfo.innerHTML = `
+    ${avatar ? `<img src="${esc(avatar)}" alt="">` : `<span class="acc-initial">${initial}</span>`}
+    <span class="acc-meta">
+      <span class="acc-name">${esc(name)}</span>
+      <span class="acc-mail">${esc(mail)}</span>
+    </span>`;
+}
+
+function initCloud() {
+  if (typeof sb === 'undefined') {
+    showToast('Cloud unavailable — running in local mode');
+    return;
+  }
+  sb.auth.onAuthStateChange((_event, s) => {
+    const uid = s?.user?.id || null;
+    session = s;
+    if (uid === loadedForUserId) { updateAuthUI(); return; }
+    loadedForUserId = uid;
+    updateAuthUI();
+    if (s) {
+      loadFromCloud();
+    } else {
+      entries = loadEntries();
+      cloudEmpty = true;
+      render();
+    }
+  });
 }
 
 /* ---------- Events ---------- */
@@ -785,10 +1007,51 @@ document.addEventListener('click', e => {
   if (!els.moreMenu.hidden && !e.target.closest('.more-wrap')) closeMoreMenu();
 });
 
+/* ---------- Auth actions ---------- */
+
+els.signInItem.addEventListener('click', async () => {
+  closeMoreMenu();
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.href.split('#')[0] },
+  });
+  if (error) showToast('Google sign-in failed — ' + error.message);
+});
+
+els.signOutItem.addEventListener('click', async () => {
+  closeMoreMenu();
+  const { error } = await sb.auth.signOut();
+  if (error) showToast('Sign out failed — ' + error.message);
+});
+
+els.migrateItem.addEventListener('click', async () => {
+  const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  if (!session || !local.length) return;
+  closeMoreMenu();
+  if (!confirm(`Upload ${local.length} local entries to Supabase?`)) return;
+  els.migrateItem.disabled = true;
+  try {
+    const rows = local.map(e => ({
+      ...entryToRow(e), created_at: e.createdAt, updated_at: e.updatedAt,
+    }));
+    const { error } = await sb.from('timeline_entries').insert(rows);
+    if (error) throw error;
+    localStorage.removeItem(STORAGE_KEY);
+    showToast(`Migrated ${rows.length} entries to the cloud ✓`);
+    await loadFromCloud();
+  } catch (err) {
+    showToast('Migration failed — ' + (err.message || 'try again'));
+  } finally {
+    els.migrateItem.disabled = false;
+    updateAuthUI();
+  }
+});
+
 /* ---------- Init ---------- */
 
 renderFilterChips();
 render();
+initCloud();
 
 // If the page was opened via a shared link (?entry=<id>), jump to that card.
 const sharedId = new URLSearchParams(location.search).get('entry');
