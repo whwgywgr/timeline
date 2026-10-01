@@ -34,6 +34,7 @@ const els = {
   dateRail: document.getElementById('dateRail'),
   filterChips: document.getElementById('filterChips'),
   moreBtn: document.getElementById('moreBtn'),
+  viewToggle: document.getElementById('viewToggle'),
   moreMenu: document.getElementById('moreMenu'),
   signInItem: document.getElementById('signInItem'),
   migrateItem: document.getElementById('migrateItem'),
@@ -66,6 +67,7 @@ let imageFailed = false;
 let urlDebounce = null;
 let toastTimer = null;
 let activeFilter = 'all';
+let compactView = localStorage.getItem('timeline-compact') === '1';
 
 /* Cloud (Supabase) state — guests keep using localStorage only. */
 let session = null;
@@ -855,8 +857,7 @@ els.timeline.addEventListener('click', e => {
 
 /* ---------- Category filter chips ---------- */
 
-function renderFilterChips() {
-  const gridIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+function renderFilterChips() {  const gridIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
   const chips = [{ key: 'all', label: 'All', icon: gridIcon }]
     .concat(Object.entries(CATEGORY_META).map(([key, meta]) => ({ key, label: meta.label, icon: meta.icon })));
 
@@ -983,6 +984,20 @@ els.filterChips.addEventListener('click', e => {
   updateActiveMonthFromScroll();
 });
 
+/* ---------- Compact view toggle ---------- */
+
+function applyCompactView() {
+  els.timeline.classList.toggle('compact', compactView);
+  els.viewToggle.classList.toggle('active', compactView);
+  els.viewToggle.setAttribute('aria-pressed', String(compactView));
+}
+
+els.viewToggle.addEventListener('click', () => {
+  compactView = !compactView;
+  localStorage.setItem('timeline-compact', compactView ? '1' : '0');
+  applyCompactView();
+});
+
 /* ---------- Header overflow menu ---------- */
 
 function closeMoreMenu() {
@@ -1052,6 +1067,7 @@ els.migrateItem.addEventListener('click', async () => {
 
 /* ---------- Init ---------- */
 
+applyCompactView();
 renderFilterChips();
 render();
 initCloud();
