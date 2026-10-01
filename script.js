@@ -1013,7 +1013,9 @@ els.signInItem.addEventListener('click', async () => {
   closeMoreMenu();
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.href.split('#')[0] },
+    // exact origin + path of the current page — this URL must be listed in
+    // Supabase Auth → URL Configuration → Redirect URLs
+    options: { redirectTo: location.origin + location.pathname },
   });
   if (error) showToast('Google sign-in failed — ' + error.message);
 });
