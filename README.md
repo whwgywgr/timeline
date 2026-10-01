@@ -21,6 +21,8 @@ npx serve .
 - **Add entries manually** via a modal form (title, event date, description, image)
 - **Categories** — tag each entry as *Games release*, *Event* or *Personal*; the
   category shows as a coloured badge at the top of its card
+- **Category filter chips** — a row of pill filters below the header (All +
+  one per category); on small screens the row scrolls horizontally
 - **Event date & time picker** — optional; leave it empty to place the entry at "now".
   The timeline is **sorted by this date** (e.g. a release or event date), with the
   entries **closest to today** shown first

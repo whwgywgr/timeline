@@ -26,6 +26,7 @@ body {
   color: var(--ink);
   line-height: 1.55;
   min-height: 100vh;
+  overflow-x: clip;
   background:
     radial-gradient(900px 480px at 88% -120px, #ece5ff 0%, transparent 60%),
     radial-gradient(720px 420px at -120px 32%, #ffeee4 0%, transparent 55%),
@@ -69,12 +70,61 @@ button { font: inherit; cursor: pointer; }
 }
 .chip-btn:hover { background: var(--danger-soft); border-color: transparent; }
 
-/* ============ Header ============ */
-.site-header { padding: 44px 20px 10px; }
+/* ============ Header (mobile-first app bar) ============ */
+.site-header { padding: 22px 20px 16px; }
+
 .header-inner {
-  max-width: 960px; margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; flex-wrap: wrap;
+  position: relative;
+  max-width: 1140px; margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px 14px;
+}
+.header-text { grid-column: 1; grid-row: 1; min-width: 0; }
+
+.more-wrap { position: relative; grid-column: 2; grid-row: 1; }
+.more-btn {
+  width: 44px; height: 44px; border-radius: 999px;
+  border: 1.5px solid var(--line); background: #fff;
+  color: var(--ink-soft);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.more-btn:hover,
+.more-btn.open { background: var(--accent-soft); color: var(--accent-strong); border-color: transparent; }
+
+.more-menu {
+  position: absolute; right: 0; top: calc(100% + 10px); z-index: 40;
+  min-width: 216px;
+  background: #fff;
+  border: 1px solid rgba(143, 123, 238, .12);
+  border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(60, 50, 100, .18);
+  padding: 6px;
+}
+.more-menu[hidden] { display: none; }
+.menu-item {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; min-height: 44px; padding: 10px 14px;
+  background: none; border: none; border-radius: 10px;
+  font: inherit; font-size: .93rem; font-weight: 700; color: var(--ink);
+  cursor: pointer; text-align: left;
+  transition: background .15s ease, color .15s ease;
+}
+.menu-item:hover { background: var(--accent-soft); color: var(--accent-strong); }
+
+.add-entry-btn {
+  grid-column: 1 / -1; grid-row: 2;
+  width: 100%; justify-content: center;
+  min-height: 48px; font-size: 1rem; gap: 9px;
+}
+
+/* desktop: same structure, actions move up beside the title */
+@media (min-width: 720px) {
+  .site-header { padding: 38px 20px 16px; }
+  .header-inner { grid-template-columns: 1fr auto auto; }
+  .add-entry-btn { grid-column: 3; grid-row: 1; width: auto; min-height: 44px; }
 }
 .logo {
   font-size: clamp(1.7rem, 4vw, 2.3rem);
@@ -84,14 +134,35 @@ button { font: inherit; cursor: pointer; }
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent;
 }
-.tagline { color: var(--muted); font-weight: 600; }
+.tagline { color: var(--muted); font-weight: 600; font-size: .9rem; margin-top: 2px; }
 
-.header-actions {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+/* ============ Category filter chips ============ */
+.filter-chips {
+  display: flex; flex-wrap: nowrap; gap: 8px;
+  overflow-x: auto; scrollbar-width: none;
+  padding: 2px 2px 10px;
+}
+.filter-chips::-webkit-scrollbar { display: none; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  flex: 0 0 auto;
+  min-height: 42px; padding: 9px 16px; border-radius: 999px;
+  border: 1.5px solid var(--line); background: transparent;
+  font: inherit; font-size: .85rem; font-weight: 800;
+  color: var(--muted);
+  transition: color .15s ease, border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.chip:hover { color: var(--ink-soft); border-color: var(--accent); }
+.chip.active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--accent-strong), #a98ef5);
+  border-color: transparent;
+  box-shadow: 0 6px 14px rgba(122, 104, 234, .28);
 }
 
 /* ============ Timeline ============ */
-main { max-width: 1140px; margin: 0 auto; padding: 8px 20px 30px; }
+main { max-width: 1140px; margin: 0 auto; padding: 0 20px 30px; }
 
 .page-layout { display: flex; align-items: flex-start; gap: 24px; }
 .timeline-area { flex: 1; min-width: 0; }
@@ -443,7 +514,6 @@ main { max-width: 1140px; margin: 0 auto; padding: 8px 20px 30px; }
 }
 
 @media (max-width: 720px) {
-  .site-header { padding-top: 30px; }
   .timeline::before { left: 11px; }
   .tl-item,
   .tl-item.right { width: 100%; margin-left: 0; padding: 0 0 26px 36px; }

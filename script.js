@@ -32,6 +32,11 @@ const els = {
   importFile: document.getElementById('importFile'),
   importInfo: document.getElementById('importInfo'),
   dateRail: document.getElementById('dateRail'),
+  filterChips: document.getElementById('filterChips'),
+  moreBtn: document.getElementById('moreBtn'),
+  moreMenu: document.getElementById('moreMenu'),
+  emptyTitle: document.querySelector('#emptyState h2'),
+  emptyText: document.querySelector('#emptyState p'),
 };
 
 const CATEGORY_META = {
@@ -55,6 +60,7 @@ let pendingImage = null;
 let imageFailed = false;
 let urlDebounce = null;
 let toastTimer = null;
+let activeFilter = 'all';
 
 /* ---------- Storage ---------- */
 
@@ -230,12 +236,23 @@ function cardHTML(entry, index) {
 }
 
 function render() {
+  renderFilterChips();
   // Entries closest to today (past or upcoming) appear first.
   const now = Date.now();
-  const sorted = [...entries].sort((a, b) =>
+  const visible = activeFilter === 'all'
+    ? entries
+    : entries.filter(e => (e.category || 'personal') === activeFilter);
+  const sorted = [...visible].sort((a, b) =>
     Math.abs(new Date(a.eventDate) - now) - Math.abs(new Date(b.eventDate) - now));
   els.timeline.innerHTML = sorted.map(cardHTML).join('');
   els.empty.hidden = sorted.length > 0;
+  if (activeFilter !== 'all' && !sorted.length) {
+    els.emptyTitle.textContent = 'No entries in this category yet';
+    els.emptyText.textContent = 'Try another category, or add one with this filter active.';
+  } else {
+    els.emptyTitle.textContent = 'No entries yet';
+    els.emptyText.textContent = 'Your timeline is waiting for its first moment.';
+  }
   renderDateRail(sorted);
 }
 
@@ -543,6 +560,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (els.overlay.classList.contains('open')) closeModal();
     if (els.importOverlay.classList.contains('open')) closeImport();
+    if (!els.moreMenu.hidden) closeMoreMenu();
   }
 });
 
@@ -611,6 +629,19 @@ els.timeline.addEventListener('click', e => {
   if (btn.dataset.action === 'edit') openModal(entry);
   if (btn.dataset.action === 'delete') deleteEntry(entry);
 });
+
+/* ---------- Category filter chips ---------- */
+
+function renderFilterChips() {
+  const gridIcon = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>';
+  const chips = [{ key: 'all', label: 'All', icon: gridIcon }]
+    .concat(Object.entries(CATEGORY_META).map(([key, meta]) => ({ key, label: meta.label, icon: meta.icon })));
+
+  els.filterChips.innerHTML = chips.map(c => `
+    <button class="chip${activeFilter === c.key ? ' active' : ''}" data-filter="${c.key}"
+      type="button" aria-pressed="${activeFilter === c.key}">${c.icon}${esc(c.label)}</button>
+  `).join('');
+}
 
 /* ---------- Date rail ---------- */
 
@@ -721,8 +752,42 @@ els.dateRail.addEventListener('click', e => {
   setTimeout(() => card.classList.remove('highlight'), 2400);
 });
 
+els.filterChips.addEventListener('click', e => {
+  const chip = e.target.closest('.chip');
+  if (!chip || chip.dataset.filter === activeFilter) return;
+  activeFilter = chip.dataset.filter;
+  render();
+  updateActiveMonthFromScroll();
+});
+
+/* ---------- Header overflow menu ---------- */
+
+function closeMoreMenu() {
+  els.moreMenu.hidden = true;
+  els.moreBtn.classList.remove('open');
+  els.moreBtn.setAttribute('aria-expanded', 'false');
+}
+
+els.moreBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  const willOpen = els.moreMenu.hidden;
+  els.moreMenu.hidden = !willOpen;
+  els.moreBtn.classList.toggle('open', willOpen);
+  els.moreBtn.setAttribute('aria-expanded', String(willOpen));
+});
+
+// Close when a menu action is chosen, when clicking elsewhere, or on Esc.
+els.moreMenu.addEventListener('click', e => {
+  if (e.target.closest('.menu-item')) closeMoreMenu();
+});
+
+document.addEventListener('click', e => {
+  if (!els.moreMenu.hidden && !e.target.closest('.more-wrap')) closeMoreMenu();
+});
+
 /* ---------- Init ---------- */
 
+renderFilterChips();
 render();
 
 // If the page was opened via a shared link (?entry=<id>), jump to that card.

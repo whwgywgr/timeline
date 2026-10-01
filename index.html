@@ -19,24 +19,30 @@
         <h1 class="logo">My Timeline</h1>
         <p class="tagline">Capture moments, one entry at a time ✨</p>
       </div>
-      <div class="header-actions">
-        <button id="exportBtn" class="btn btn-ghost" type="button">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Export
+      <div class="more-wrap">
+        <button id="moreBtn" class="more-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="More options">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2.1"/><circle cx="12" cy="12" r="2.1"/><circle cx="19" cy="12" r="2.1"/></svg>
         </button>
-        <button id="importBtn" class="btn btn-ghost" type="button">
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          Import
-        </button>
-        <button id="addBtn" class="btn btn-primary" type="button">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add entry
-        </button>
+        <div id="moreMenu" class="more-menu" hidden>
+          <button id="exportBtn" class="menu-item" type="button">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export backup
+          </button>
+          <button id="importBtn" class="menu-item" type="button">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import backup
+          </button>
+        </div>
       </div>
+      <button id="addBtn" class="btn btn-primary add-entry-btn" type="button">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add entry
+      </button>
     </div>
   </header>
 
   <main>
+    <nav id="filterChips" class="filter-chips" aria-label="Filter by category"></nav>
     <div class="page-layout">
       <nav id="dateRail" class="date-rail" aria-label="Jump to month" hidden></nav>
       <div class="timeline-area">
