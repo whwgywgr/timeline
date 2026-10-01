@@ -8,13 +8,13 @@ Built with plain **HTML, CSS and JavaScript** only — no frameworks, no build s
 
 ## Run it
 
-Open `index.html` directly in your browser (double-click it), or serve the folder:
+Open `start-server.bat` (double-click) — it serves the app at
+http://localhost:8123 and opens it in your browser. Keep the window open
+while using the app; Google sign-in needs this server running to complete.
 
-```bash
-cd timeline-website
-npx serve .
-# or: python -m http.server 8000
-```
+Alternatively: `python -m http.server 8123`, `npx serve .`, or open
+`index.html` directly (everything except Google sign-in works from a
+direct file open).
 
 ## Features
 
