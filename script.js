@@ -655,6 +655,7 @@ function rowToLocal(r) {
 
 function entryToRow(entry) {
   return {
+    user_id: session?.user?.id,
     title: entry.title,
     description: entry.description || '',
     image: entry.image || '',
