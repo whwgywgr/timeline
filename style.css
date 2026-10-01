@@ -138,18 +138,39 @@ main { max-width: 960px; margin: 0 auto; padding: 8px 20px 30px; }
   clip-path: polygon(0 0, 100% 0, 100% 100%);
 }
 
-.card-media {
-  position: relative;
+.card-media { position: relative; }
+.card-img {
+  display: block; width: 100%; height: 240px; object-fit: cover;
+  background: #1d2029;
+}
+/* darkening gradient — the lower image melts into the card background */
+.card-media::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 110px;
+  background: linear-gradient(to bottom, rgba(21, 23, 30, 0) 0%, rgba(21, 23, 30, .55) 55%, #15171e 100%);
+  pointer-events: none;
+}
+/* blurred echo of the image bleeding under the content for a cinematic seam */
+.card-img-echo {
+  position: absolute; left: -30px; top: 150px;
+  width: calc(100% + 60px); height: 260px;
+  object-fit: cover; object-position: center top;
+  filter: blur(7px) saturate(1.1) brightness(.9);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, .55) 22%, #000 42%, rgba(0, 0, 0, .75) 62%, rgba(0, 0, 0, .35) 82%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, .55) 22%, #000 42%, rgba(0, 0, 0, .75) 62%, rgba(0, 0, 0, .35) 82%, transparent 100%);
+  pointer-events: none;
+}
+.card.img-failed .card-media {
   min-height: 170px;
   background: linear-gradient(135deg, #262b36, #181b24);
 }
-.card-media.img-failed .card-img { display: none; }
+.card.img-failed .card-img,
+.card.img-failed .card-img-echo { display: none; }
 .card-img {
   display: block; width: 100%; height: 240px; object-fit: cover;
   background: #1d2029;
 }
 
-.card-body { padding: 16px 18px 18px; }
+.card-body { position: relative; z-index: 1; padding: 12px 18px 18px; }
 
 /* category badge — overlaid on the image, or inline when there is no image */
 .card-cat {
@@ -160,7 +181,7 @@ main { max-width: 960px; margin: 0 auto; padding: 8px 20px 30px; }
   border: 1px solid rgba(255, 255, 255, .10);
   border-radius: 999px; padding: 6px 12px;
 }
-.card-cat.static { position: static; margin-bottom: 12px; align-self: flex-start; }
+.card-cat.static { position: static; margin-top: 14px; margin-bottom: 12px; align-self: flex-start; }
 .cat-games { color: #b39cff; }
 .cat-event { color: #ff9d6b; }
 .cat-personal { color: #4ade80; }

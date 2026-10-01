@@ -179,9 +179,11 @@ function cardHTML(entry, index) {
   const media = entry.image
     ? `<div class="card-media">
         <img class="card-img" src="${esc(entry.image)}" alt="${esc(entry.title)}" loading="lazy"
-          onerror="this.closest('.card-media') && this.closest('.card-media').classList.add('img-failed')">
+          onerror="this.closest('.card') && this.closest('.card').classList.add('img-failed')">
         ${catBadge}
-      </div>`
+      </div>
+      <img class="card-img-echo" src="${esc(entry.image)}" alt="" aria-hidden="true"
+        onerror="this.style.display='none'">`
     : '';
   const inlineCat = entry.image ? '' : catBadge.replace('card-cat', 'card-cat static');
   const desc = entry.description
